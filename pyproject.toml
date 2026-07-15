@@ -1,0 +1,32 @@
+[project]
+name = "korean-josa-masker"
+version = "0.1.0"
+description = "조사 인지 한국어 이름 마스킹 — catch name+조사 without over-masking common syllables."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{ name = "Deokhyeon Eom", email = "edh9692@gmail.com" }]
+keywords = ["korean", "korean-nlp", "masking", "pii", "privacy", "josa", "particle"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Natural Language :: Korean",
+    "Topic :: Text Processing :: Linguistic",
+]
+dependencies = []
+
+[dependency-groups]
+dev = ["pytest>=8", "hypothesis>=6", "ruff>=0.6"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/korean_josa_masker"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
