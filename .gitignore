@@ -22,7 +22,7 @@ htmlcov/
 .idea/
 .vscode/
 
-# AI tooling exhaust (프로세스 아티팩트는 docs/에 커밋, 툴 배설물은 무시)
+# AI tooling exhaust
 .omc/
 .claude/
 .superclaude/
