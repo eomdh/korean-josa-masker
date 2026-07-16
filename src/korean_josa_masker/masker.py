@@ -41,14 +41,18 @@ def mask(
         return text
 
     result = text
+    ph = re.escape(placeholder)
     particle = rf"(?:{_PARTICLE_ALTERNATION})"
+    # 끝 경계: 조사 | 공백·문장부호 | 문자열 끝. 단 placeholder(***)는 경계로 치지 않는다 —
+    # 이미 마스킹된 자리를 경계로 삼으면 두 번째 통과에서 인접 이름을 재마스킹해 멱등성이 깨진다.
+    end = rf"(?!{ph})\W|$"
     # 길이 내림차순: 긴 이름을 먼저 치환해 부분 문자열 충돌 방지("김"이 "김민수"를 먼저 먹지 않게).
     for name in sorted(names, key=len, reverse=True):
         if keep_particle:
             # 이름만 치환하고 뒤 조사는 lookahead로 확인만 한다 → "홍길동은" → "***은".
-            pattern = re.escape(name) + rf"(?={particle}|\s|\W|$)"
+            pattern = re.escape(name) + rf"(?={particle}|{end})"
         else:
             # 뒤따르는 조사가 있으면 함께 소거한다 → "홍길동은" → "***".
-            pattern = re.escape(name) + rf"{particle}?(?=\s|\W|$)"
+            pattern = re.escape(name) + rf"{particle}?(?={end})"
         result = re.sub(pattern, placeholder, result)
     return result

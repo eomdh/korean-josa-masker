@@ -17,9 +17,19 @@ hangul_name = st.text(
 )
 
 
-@given(text=st.text(), names=st.lists(hangul_name, max_size=3))
-def test_idempotent(text, names):
-    # 두 번 마스킹해도 결과가 같다 (입력·출력 이중 방어에서 안전)
+@given(
+    names=st.lists(hangul_name, min_size=1, max_size=4, unique=True),
+    data=st.data(),
+)
+def test_idempotent(names, data):
+    # 두 번 마스킹해도 결과가 같다 (입력·출력 이중 방어에서 안전).
+    # 이름 + 구분자(빈 문자열 포함 → 인접 반복)로 실제 마스킹이 일어나는 텍스트를 만든다.
+    seps = ["", " ", "은 ", "이 ", "에게 ", "와 ", ". ", "다"]
+    parts = []
+    for _ in range(data.draw(st.integers(min_value=0, max_value=6))):
+        parts.append(data.draw(st.sampled_from(names)))
+        parts.append(data.draw(st.sampled_from(seps)))
+    text = "".join(parts)
     once = mask(text, names)
     assert mask(once, names) == once
 
