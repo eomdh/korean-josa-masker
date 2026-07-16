@@ -1,5 +1,7 @@
 # korean-josa-masker
 
+[![CI](https://github.com/eomdh/korean-josa-masker/actions/workflows/ci.yml/badge.svg)](https://github.com/eomdh/korean-josa-masker/actions/workflows/ci.yml)
+
 한국어 조사(助詞)를 인지해 텍스트 속 이름을 가리는 마스킹 라이브러리.
 
 ```text
