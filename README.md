@@ -13,13 +13,25 @@
 ## 사용
 
 ```python
-from korean_josa_masker import mask
+from korean_josa_masker import mask, mask_structured, mask_with_spans, pseudonymizer
 
 mask("홍길동은 김철수에게 전달했다", ["홍길동", "김철수"])
 # → "***은 ***에게 전달했다"
 
 mask("홍길동은 왔다", ["홍길동"], keep_particle=False)
 # → "*** 왔다"
+
+# 구조체(LLM JSON 출력) 재귀 마스킹
+mask_structured({"author": "홍길동이 작성", "tags": ["김철수 확인"]}, ["홍길동", "김철수"])
+# → {"author": "***이 작성", "tags": ["*** 확인"]}
+
+# 일관된 가명 — 같은 이름은 같은 태그, 등장 순서대로 번호
+mask("홍길동은 김철수와 다시 홍길동이", ["홍길동", "김철수"], placeholder=pseudonymizer())
+# → "[사람1]은 [사람2]와 다시 [사람1]이"
+
+# 가려진 위치(start, end, name)까지
+mask_with_spans("홍길동은 왔다", ["홍길동"])
+# → ("***은 왔다", [(0, 3, "홍길동")])
 ```
 
 ## 설계 결정
@@ -29,7 +41,7 @@ mask("홍길동은 왔다", ["홍길동"], keep_particle=False)
 - **길이 내림차순 치환** — `["김", "김민수"]`에서 짧은 이름이 긴 이름을 먼저 먹는 부분 문자열 충돌을 막는다.
 - **조사 기본 보존** (`keep_particle=True`) — `***은 담당자입니다`가 문법·가독성을 유지한다. 조사까지 먹으면 문장이 깨진다.
 - **멱등성** — 입력·출력 이중 마스킹에서 두 번 돌려도 결과가 같다. `placeholder`를 경계로 치지 않아 인접 이름 재마스킹을 막는다.
-- **정책 분리** (`MaskPolicy`) — 기본은 정규식(`RegexJosaPolicy`, 결정적·무의존·감사 가능). `policy=` 로 다른 정책(예: NER 기반)을 끼울 수 있다.
+- **정책 분리** (`MaskPolicy.find_spans`) — 정책은 "탐지"만 책임진다(이름 위치를 반환). 치환·구조체 순회·가명은 그 위에서 조립된다. 기본은 정규식(`RegexJosaPolicy`, 결정적·무의존), `policy=` 로 NER 기반 등을 끼울 수 있다.
 
 ## 한계
 
