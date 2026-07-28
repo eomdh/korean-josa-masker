@@ -15,7 +15,7 @@ from typing import Protocol
 
 from .particles import COPULA, PARTICLES
 
-__all__ = ["MaskPolicy", "RegexJosaPolicy", "Span"]
+__all__ = ["CompositePolicy", "MaskPolicy", "RegexJosaPolicy", "Span"]
 
 Span = tuple[int, int, str]
 """가려질 구간: (시작 인덱스, 끝 인덱스[제외], 원본 이름)."""
@@ -72,3 +72,50 @@ class RegexJosaPolicy:
             # 소거하지 않고 남긴다 → "홍길동입니다"는 "***입니다".
             pattern = rf"(?P<name>{names_alt})(?:{particle})?(?={copula}|{end})"
         return [(m.start(), m.end(), m.group("name")) for m in re.finditer(pattern, text)]
+
+
+def _merge_spans(spans: list[Span]) -> list[Span]:
+    """겹치는 스팬을 union 으로 합쳐 정렬 + 비겹침 리스트로 정규화.
+
+    ``_apply_spans`` 는 스팬이 정렬되고 겹치지 않는다고 가정. 여러 정책의 탐지를 합치면
+    동일/포함/부분 겹침이 생기므로 여기서 해소. 규칙: 시작 오름차순(같은 시작이면 넓은 것
+    먼저) 정렬 후, 직전 채택과 겹치면 끝을 늘려 union 병합하고 이름은 앞 스팬 것 유지.
+    완전 포함은 흡수, 안 겹치면 새로 채택. 부분 겹침의 꼬리도 union 이라 노출되지 않음.
+    """
+    result: list[Span] = []
+    for start, end, name in sorted(spans, key=lambda s: (s[0], -s[1])):
+        if result and start < result[-1][1]:
+            prev_start, prev_end, prev_name = result[-1]
+            if end > prev_end:
+                result[-1] = (prev_start, end, prev_name)  # union 으로 끝 확장
+            # else: 완전 포함 → 흡수(버림)
+        else:
+            result.append((start, end, name))
+    return result
+
+
+class CompositePolicy:
+    """여러 :class:`MaskPolicy` 를 합쳐 탐지의 합집합을 내는 정책.
+
+    각 멤버의 ``find_spans`` 결과를 모아 :func:`_merge_spans` 로 정렬 + 비겹침 정규화.
+    멤버 중 하나라도 잡으면 마스킹 대상. 결정적 바닥(:class:`RegexJosaPolicy`) 위에 NER
+    등 다른 정책을 의존성 없이 얹는 조립 지점. 자신도 ``MaskPolicy`` 라 중첩 가능.
+    """
+
+    def __init__(self, *policies: MaskPolicy) -> None:
+        self._policies = policies
+
+    def find_spans(
+        self,
+        text: str,
+        names: list[str],
+        *,
+        keep_particle: bool = True,
+        exclude: str | None = None,
+    ) -> list[Span]:
+        spans: list[Span] = []
+        for policy in self._policies:
+            spans.extend(
+                policy.find_spans(text, names, keep_particle=keep_particle, exclude=exclude)
+            )
+        return _merge_spans(spans)

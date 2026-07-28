@@ -37,6 +37,11 @@ mask("홍길동은 김철수와 다시 홍길동이", ["홍길동", "김철수"]
 # 가려진 위치(start, end, name)까지
 mask_with_spans("홍길동은 왔다", ["홍길동"])
 # → ("***은 왔다", [(0, 3, "홍길동")])
+
+# 정책 조립 — 여러 MaskPolicy 의 탐지를 합집합으로 (겹치면 union 병합)
+from korean_josa_masker import CompositePolicy, RegexJosaPolicy
+mask("홍길동입니다", ["홍길동"], policy=CompositePolicy(RegexJosaPolicy()))
+# → "***입니다"  (RegexJosaPolicy 위에 NER 등 다른 정책을 함께 얹는 지점)
 ```
 
 ## 설계 결정
@@ -47,6 +52,7 @@ mask_with_spans("홍길동은 왔다", ["홍길동"])
 - **조사 기본 보존** (`keep_particle=True`) — `***은 담당자입니다`가 문법·가독성을 유지한다. 조사까지 먹으면 문장이 깨진다.
 - **멱등성** — 입력·출력 이중 마스킹에서 두 번 돌려도 결과가 같다. `placeholder`를 경계로 치지 않아 인접 이름 재마스킹을 막는다.
 - **정책 분리** (`MaskPolicy.find_spans`) — 정책은 "탐지"만 책임진다(이름 위치를 반환). 치환·구조체 순회·가명은 그 위에서 조립된다. 기본은 정규식(`RegexJosaPolicy`, 결정적·무의존), `policy=` 로 NER 기반 등을 끼울 수 있다.
+- **정책 조립** (`CompositePolicy`) — 여러 정책을 합쳐 탐지의 합집합. 겹치는 스팬은 union 으로 병합해 정렬된 비겹침으로 정규화(`_apply_spans` 가 가정하는 형태). 결정적 바닥 위에 다른 정책을 의존성 없이 얹는 조립 지점.
 
 ## 한계
 
