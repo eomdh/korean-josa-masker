@@ -13,7 +13,7 @@ from typing import Any
 
 from .policy import MaskPolicy, RegexJosaPolicy, Span
 
-__all__ = ["mask", "mask_with_spans", "mask_structured", "pseudonymizer"]
+__all__ = ["mask", "mask_structured", "mask_with_spans", "pseudonymizer"]
 
 _DEFAULT_POLICY = RegexJosaPolicy()
 

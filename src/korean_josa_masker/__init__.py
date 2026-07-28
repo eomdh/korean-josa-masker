@@ -4,12 +4,12 @@ from .masker import mask, mask_structured, mask_with_spans, pseudonymizer
 from .policy import MaskPolicy, RegexJosaPolicy, Span
 
 __all__ = [
-    "mask",
-    "mask_with_spans",
-    "mask_structured",
-    "pseudonymizer",
     "MaskPolicy",
     "RegexJosaPolicy",
     "Span",
+    "mask",
+    "mask_structured",
+    "mask_with_spans",
+    "pseudonymizer",
 ]
 __version__ = "0.1.0"
