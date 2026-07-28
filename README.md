@@ -42,6 +42,11 @@ mask_with_spans("홍길동은 왔다", ["홍길동"])
 from korean_josa_masker import CompositePolicy, RegexJosaPolicy
 mask("홍길동입니다", ["홍길동"], policy=CompositePolicy(RegexJosaPolicy()))
 # → "***입니다"  (RegexJosaPolicy 위에 NER 등 다른 정책을 함께 얹는 지점)
+
+# 오탐 가드 — 보호할 표면형을 주면 그 구간의 이름은 안 가림 (동음이의어 완화)
+from korean_josa_masker import GuardedPolicy
+mask("이상 없음을 이상에게", ["이상"], policy=GuardedPolicy(RegexJosaPolicy(), ["이상 없음"]))
+# → "이상 없음을 ***에게"  ("이상 없음"의 이상은 보존, 사람 이상만 가림)
 ```
 
 ## 설계 결정
@@ -53,10 +58,11 @@ mask("홍길동입니다", ["홍길동"], policy=CompositePolicy(RegexJosaPolicy
 - **멱등성** — 입력·출력 이중 마스킹에서 두 번 돌려도 결과가 같다. `placeholder`를 경계로 치지 않아 인접 이름 재마스킹을 막는다.
 - **정책 분리** (`MaskPolicy.find_spans`) — 정책은 "탐지"만 책임진다(이름 위치를 반환). 치환·구조체 순회·가명은 그 위에서 조립된다. 기본은 정규식(`RegexJosaPolicy`, 결정적·무의존), `policy=` 로 NER 기반 등을 끼울 수 있다.
 - **정책 조립** (`CompositePolicy`) — 여러 정책을 합쳐 탐지의 합집합. 겹치는 스팬은 union 으로 병합해 정렬된 비겹침으로 정규화(`_apply_spans` 가 가정하는 형태). 결정적 바닥 위에 다른 정책을 의존성 없이 얹는 조립 지점.
+- **오탐 가드** (`GuardedPolicy`) — 보호할 표면형을 받아 그 구간과 겹치는 이름 스팬을 결정적으로 제거. 이름 단위가 아니라 스팬 단위라, 같은 이름이라도 보호 구절 안 위치만 살리고 다른 위치는 그대로 마스킹. NER 없이 동음이의어 과잉 마스킹 완화.
 
 ## 한계
 
-- **동음이의어 과잉 마스킹** — 정규식은 의미를 모른다. 이름 `이상`과 단어 `이상 없음`을 구분하지 못한다. → `MaskPolicy` 인터페이스가 열려 있어 `NerPolicy` 같은 정책을 끼워 보완할 수 있다(정규식은 결정적 바닥).
+- **동음이의어 과잉 마스킹** — 정규식은 의미를 모른다. 이름 `이상`과 단어 `이상 없음`을 구분하지 못한다. → 보호 표면형을 열거하면 `GuardedPolicy`로 결정적이고 의존성 없이 완화할 수 있다(위 사용 예시). 열거 없이 완전 자동 판정은 여전히 `NerPolicy` 같은 정책의 몫(정규식은 결정적 바닥).
 - **범용 PII 범위 밖** — 전화·이메일·주민번호 등은 다루지 않는다. 조사-인지 이름 마스킹에 집중.
 
 ## 개발

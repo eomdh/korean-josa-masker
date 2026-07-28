@@ -11,11 +11,12 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from typing import Protocol
 
 from .particles import COPULA, PARTICLES
 
-__all__ = ["CompositePolicy", "MaskPolicy", "RegexJosaPolicy", "Span"]
+__all__ = ["CompositePolicy", "GuardedPolicy", "MaskPolicy", "RegexJosaPolicy", "Span"]
 
 Span = tuple[int, int, str]
 """가려질 구간: (시작 인덱스, 끝 인덱스[제외], 원본 이름)."""
@@ -74,6 +75,11 @@ class RegexJosaPolicy:
         return [(m.start(), m.end(), m.group("name")) for m in re.finditer(pattern, text)]
 
 
+def _overlaps(a_start: int, a_end: int, b_start: int, b_end: int) -> bool:
+    """두 반열림 구간 [a_start, a_end), [b_start, b_end) 가 겹치는가(맞닿음은 겹침 아님)."""
+    return a_start < b_end and b_start < a_end
+
+
 def _merge_spans(spans: list[Span]) -> list[Span]:
     """겹치는 스팬을 union 으로 합쳐 정렬 + 비겹침 리스트로 정규화.
 
@@ -84,7 +90,7 @@ def _merge_spans(spans: list[Span]) -> list[Span]:
     """
     result: list[Span] = []
     for start, end, name in sorted(spans, key=lambda s: (s[0], -s[1])):
-        if result and start < result[-1][1]:
+        if result and _overlaps(result[-1][0], result[-1][1], start, end):
             prev_start, prev_end, prev_name = result[-1]
             if end > prev_end:
                 result[-1] = (prev_start, end, prev_name)  # union 으로 끝 확장
@@ -119,3 +125,34 @@ class CompositePolicy:
                 policy.find_spans(text, names, keep_particle=keep_particle, exclude=exclude)
             )
         return _merge_spans(spans)
+
+
+class GuardedPolicy:
+    """``inner`` 정책의 탐지 중 보호 표면형과 겹치는 스팬을 제거하는 가드 정책.
+
+    정규식은 의미를 몰라 이름 ``이상`` 과 단어 ``이상 없음`` 을 구분 못 함. 호출자가 보호할
+    표면형(``protect``)을 주면, 그 표면형이 나타난 구간과 겹치는 이름 스팬을 결정적으로 제거.
+    이름 단위가 아니라 스팬 단위라, 같은 이름이라도 보호 구절 안의 그 위치만 살리고 다른
+    위치의 진짜 이름은 그대로 마스킹. NER 없이 동음이의어 과잉 마스킹을 완화.
+    """
+
+    def __init__(self, inner: MaskPolicy, protect: Iterable[str]) -> None:
+        self._inner = inner
+        self._protect = [p for p in protect if p]  # 빈 문자열은 zero-width 매치라 방어적으로 제외
+
+    def find_spans(
+        self,
+        text: str,
+        names: list[str],
+        *,
+        keep_particle: bool = True,
+        exclude: str | None = None,
+    ) -> list[Span]:
+        spans = self._inner.find_spans(text, names, keep_particle=keep_particle, exclude=exclude)
+        if not self._protect:
+            return spans
+        guard = "|".join(re.escape(p) for p in self._protect)
+        regions = [(m.start(), m.end()) for m in re.finditer(guard, text)]
+        if not regions:
+            return spans
+        return [s for s in spans if not any(_overlaps(s[0], s[1], r[0], r[1]) for r in regions)]
