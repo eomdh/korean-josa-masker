@@ -13,7 +13,7 @@ from __future__ import annotations
 import re
 from typing import Protocol
 
-from .particles import PARTICLES
+from .particles import COPULA, PARTICLES
 
 __all__ = ["MaskPolicy", "RegexJosaPolicy", "Span"]
 
@@ -43,6 +43,8 @@ class RegexJosaPolicy:
 
     # 긴 조사부터 매치되도록 정렬한 대안(예: "에게서" > "에게" > "에").
     _PARTICLE_ALTERNATION = "|".join(sorted(PARTICLES, key=len, reverse=True))
+    # 서술격 조사 경계(입니다, 예요, 였). 조사와 달리 소거 대상이 아니라 확인 전용.
+    _COPULA_ALTERNATION = "|".join(sorted(COPULA, key=len, reverse=True))
 
     def find_spans(
         self,
@@ -58,13 +60,15 @@ class RegexJosaPolicy:
         ordered = sorted(set(names), key=len, reverse=True)
         names_alt = "|".join(re.escape(n) for n in ordered)
         particle = rf"(?:{self._PARTICLE_ALTERNATION})"
+        copula = rf"(?:{self._COPULA_ALTERNATION})"
         # 끝 경계에서 exclude(치환 결과, 예: "***")는 경계로 치지 않는다 → 재탐지 방지(멱등성).
         skip = rf"(?!{re.escape(exclude)})" if exclude else ""
         end = rf"{skip}\W|$"
         if keep_particle:
-            # 이름만 구간에 담고 조사는 lookahead로 확인만 → "홍길동은"의 "홍길동"만.
-            pattern = rf"(?P<name>{names_alt})(?={particle}|{end})"
+            # 이름만 구간에 담고 조사와 서술격은 lookahead로 확인만 → "홍길동입니다"의 "홍길동"만.
+            pattern = rf"(?P<name>{names_alt})(?={particle}|{copula}|{end})"
         else:
-            # 뒤 조사가 있으면 구간에 포함해 함께 소거 → "홍길동은" 전체.
-            pattern = rf"(?P<name>{names_alt})(?:{particle})?(?={end})"
+            # 조사는 구간에 포함해 함께 소거하되(→ "홍길동은" 전체), 서술격은 경계로만 확인해
+            # 소거하지 않고 남긴다 → "홍길동입니다"는 "***입니다".
+            pattern = rf"(?P<name>{names_alt})(?:{particle})?(?={copula}|{end})"
         return [(m.start(), m.end(), m.group("name")) for m in re.finditer(pattern, text)]
